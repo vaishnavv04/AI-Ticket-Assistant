@@ -5,41 +5,33 @@ import { inngest } from "../inngest/client.js";
 
 export const signup = async (req, res) => {
   const { email, password, skills = [] } = req.body;
+  
+  // Validate required fields
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
+  
+  // Check if JWT_SECRET is configured
+  if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET environment variable is not set");
+    return res.status(500).json({ error: "Server configuration error" });
+  }
+  
   try {
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({ email, password: hashed, skills });
 
-    //Fire inngest event
-
-    await inngest.send({
-      name: "user/signup",
-      data: {
-        email,
-      },
-    });
-
-    const token = jwt.sign(
-      { _id: user._id, role: user.role },
-      process.env.JWT_SECRET
-    );
-
-    res.json({ user, token });
-  } catch (error) {
-    res.status(500).json({ error: "Signup failed", details: error.message });
-  }
-};
-
-export const login = async (req, res) => {
-  const { email, password } = req.body;
-
-  try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: "User not found" });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch) {
-      return res.status(401).json({ error: "Invalid credentials" });
+    // Fire inngest event
+    try {
+      await inngest.send({
+        name: "user/signup",
+        data: {
+          email,
+        },
+      });
+    } catch (inngestError) {
+      console.error("Inngest event failed:", inngestError.message);
+      // Continue with signup even if Inngest fails
     }
 
     const token = jwt.sign(
@@ -49,6 +41,49 @@ export const login = async (req, res) => {
 
     res.json({ user, token });
   } catch (error) {
+    console.error("Signup error:", error);
+    
+    // Handle specific MongoDB errors
+    if (error.code === 11000) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+    
+    res.status(500).json({ error: "Signup failed", details: error.message });
+  }
+};
+
+export const login = async (req, res) => {
+  const { email, password } = req.body;
+
+  // Validate required fields
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
+  
+  // Check if JWT_SECRET is configured
+  if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET environment variable is not set");
+    return res.status(500).json({ error: "Server configuration error" });
+  }
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(401).json({ error: "Invalid email or password" });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+
+    const token = jwt.sign(
+      { _id: user._id, role: user.role },
+      process.env.JWT_SECRET
+    );
+
+    res.json({ user, token });
+  } catch (error) {
+    console.error("Login error:", error);
     res.status(500).json({ error: "Login failed", details: error.message });
   }
 };
