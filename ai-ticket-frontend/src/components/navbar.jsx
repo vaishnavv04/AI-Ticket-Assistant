@@ -17,7 +17,7 @@ export default function Navbar() {
     <div className="navbar bg-base-200">
       <div className="flex-1">
         <Link to="/" className="btn btn-ghost text-xl">
-          Ticket AI
+          AI Ticket Assistant
         </Link>
       </div>
       <div className="flex gap-2">

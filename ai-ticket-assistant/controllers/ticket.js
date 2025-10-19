@@ -1,7 +1,4 @@
 import { inngest } from "../inngest/client.js";
-import analyzeTicket from "../utils/ai.js";
-import User from "../models/user.js";
-import { sendMail } from "../utils/mailer.js";
 import Ticket from "../models/ticket.js";
 
 export const createTicket = async (req, res) => {
@@ -27,50 +24,6 @@ export const createTicket = async (req, res) => {
         createdBy: req.user._id.toString(),
       },
     });
-
-    // Optional direct processing without Inngest runner
-    if (process.env.ENABLE_DIRECT_TICKET_PROCESSING === "true") {
-      try {
-        // Mark TODO while processing
-        await Ticket.findByIdAndUpdate(newTicket._id, { status: "TODO" });
-
-        const aiResponse = await analyzeTicket(newTicket);
-        let relatedSkills = [];
-        if (aiResponse) {
-          await Ticket.findByIdAndUpdate(newTicket._id, {
-            priority: ["low", "medium", "high"].includes(aiResponse.priority)
-              ? aiResponse.priority
-              : "medium",
-            helpfulNotes: aiResponse.helpfulNotes,
-            status: "IN_PROGRESS",
-            relatedSkills: aiResponse.relatedSkills,
-          });
-          relatedSkills = aiResponse.relatedSkills || [];
-        }
-
-        let moderator = await User.findOne({
-          role: "moderator",
-          skills: { $elemMatch: { $regex: relatedSkills.join("|"), $options: "i" } },
-        });
-        if (!moderator) {
-          moderator = await User.findOne({ role: "admin" });
-        }
-        await Ticket.findByIdAndUpdate(newTicket._id, {
-          assignedTo: moderator?._id || null,
-        });
-
-        if (moderator) {
-          const finalTicket = await Ticket.findById(newTicket._id);
-          await sendMail(
-            moderator.email,
-            "Ticket Assigned",
-            `A new ticket is assigned to you ${finalTicket.title}`
-          );
-        }
-      } catch (e) {
-        console.error("Direct AI processing failed:", e.message);
-      }
-    }
     return res.status(201).json({
       message: "Ticket created and processing started",
       ticket: newTicket,
@@ -84,17 +37,50 @@ export const createTicket = async (req, res) => {
 export const getTickets = async (req, res) => {
   try {
     const user = req.user;
-    let tickets = [];
-    if (user.role !== "user") {
-      tickets = await Ticket.find({})
-        .populate("assignedTo", ["email", "_id"])
-        .sort({ createdAt: -1 });
-    } else {
-      tickets = await Ticket.find({ createdBy: user._id })
-        .select("title description status createdAt")
-        .sort({ createdAt: -1 });
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
+    const status = req.query.status?.trim();
+    const search = req.query.search?.trim();
+
+    const filter = {};
+    if (user.role === "user") {
+      filter.createdBy = user._id;
     }
-    return res.status(200).json({ tickets });
+
+    if (status && status.toLowerCase() !== "all") {
+      filter.status = status.toUpperCase();
+    }
+
+    if (search) {
+      const regex = new RegExp(search, "i");
+      filter.$or = [{ title: regex }, { description: regex }];
+    }
+
+    const total = await Ticket.countDocuments(filter);
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+    const safePage = Math.min(page, totalPages);
+    const skip = (safePage - 1) * limit;
+
+    let query = Ticket.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    if (user.role !== "user") {
+      query = query.populate("assignedTo", ["email", "_id"]);
+    } else {
+      query = query.select("title description status createdAt");
+    }
+
+    const tickets = await query;
+
+    return res.status(200).json({
+      tickets,
+      page: safePage,
+      totalPages,
+      total,
+      pageSize: limit,
+    });
   } catch (error) {
     console.error("Error fetching tickets", error.message);
     return res.status(500).json({ message: "Internal Server Error" });
@@ -153,6 +139,51 @@ export const updateTicket = async (req, res) => {
     return res.json({ ticket });
   } catch (error) {
     console.error("Error updating ticket", error.message);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const deleteTicket = async (req, res) => {
+  try {
+    if (req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    await ticket.deleteOne();
+    return res.json({ message: "Ticket deleted" });
+  } catch (error) {
+    console.error("Error deleting ticket", error.message);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const deleteTicketsBulk = async (req, res) => {
+  try {
+    if (req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const normalizedIds = [...new Set(ids.filter((id) => typeof id === "string" && id.trim()))];
+
+    if (normalizedIds.length === 0) {
+      return res.status(400).json({ message: "No ticket IDs provided" });
+    }
+
+    const result = await Ticket.deleteMany({ _id: { $in: normalizedIds } });
+    const deletedCount = result?.deletedCount || 0;
+
+    return res.json({
+      message: `Deleted ${deletedCount} ticket${deletedCount === 1 ? "" : "s"}`,
+      deletedCount,
+    });
+  } catch (error) {
+    console.error("Error deleting tickets", error.message);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };

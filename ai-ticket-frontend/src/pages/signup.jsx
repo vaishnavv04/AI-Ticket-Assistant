@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function SignupPage() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -32,7 +32,8 @@ export default function SignupPage() {
         localStorage.setItem("user", JSON.stringify(data.user));
         navigate("/");
       } else {
-        alert(data.message || "Signup failed");
+        const serverMessage = data?.error || data?.message;
+        alert(serverMessage || "Signup failed");
       }
     } catch (err) {
       alert("Something went wrong");
@@ -77,6 +78,13 @@ export default function SignupPage() {
               {loading ? "Signing up..." : "Sign Up"}
             </button>
           </div>
+
+          <p className="mt-4 text-center text-sm text-base-content/70">
+            Already have an account?{" "}
+            <Link to="/login" className="link link-primary">
+              Log in
+            </Link>
+          </p>
         </form>
       </div>
     </div>

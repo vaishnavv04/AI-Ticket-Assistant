@@ -12,7 +12,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // Check for required environment variables
-const requiredEnvVars = ["MONGO_URI", "JWT_SECRET"];
+const requiredEnvVars = ["MONGO_URI", "JWT_SECRET", "GEMINI_API_KEY"];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {

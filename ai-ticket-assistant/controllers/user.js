@@ -126,8 +126,33 @@ export const getUsers = async (req, res) => {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const users = await User.find().select("-password");
-    return res.json(users);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
+    const search = req.query.search?.trim();
+
+    const filter = {};
+    if (search) {
+      filter.email = { $regex: search, $options: "i" };
+    }
+
+    const total = await User.countDocuments(filter);
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+    const safePage = Math.min(page, totalPages);
+    const skip = (safePage - 1) * limit;
+
+    const users = await User.find(filter)
+      .select("-password")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    return res.json({
+      users,
+      page: safePage,
+      totalPages,
+      total,
+      pageSize: limit,
+    });
   } catch (error) {
     res.status(500).json({ error: "Update failed", details: error.message });
   }

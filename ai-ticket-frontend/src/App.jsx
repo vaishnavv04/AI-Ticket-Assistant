@@ -2,7 +2,7 @@
 function App() {
   return (
     <div className="App">
-      <h1>AI Ticket System</h1>
+      <h1>AI Ticket Assistant</h1>
     </div>
   );
 }

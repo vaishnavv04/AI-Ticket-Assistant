@@ -7,7 +7,7 @@ An AI‑powered, production‑ready ticketing system. Users submit support ticke
 - Auto‑assignment to moderators by skills 
 - JWT auth with RBAC: `user`, `moderator`, `admin`
 - Admin: manage users, roles, and skills
-- Background workers with Inngest 3, or inline processing fallback
+- Background workers with Inngest 3
 - Email notifications via Mailtrap + Nodemailer
 - React 19 + Vite, Tailwind v4 + DaisyUI, modern UI/UX
 
@@ -27,7 +27,7 @@ AI-ticket-system-main/
 - Node.js v18+
 - MongoDB connection string
 - Mailtrap account (SMTP) for emails
-- Optional: Gemini API key for live AI; otherwise the app falls back to a heuristic analyzer
+- Gemini API key for live AI
 
 ## Setup
 Clone and install both apps.
@@ -57,11 +57,10 @@ MAILTRAP_SMTP_PORT=2525
 MAILTRAP_SMTP_USER=your_user
 MAILTRAP_SMTP_PASS=your_pass
 
-# AI (optional)
+# AI
 GEMINI_API_KEY=your_gemini_api_key
 
-# Inline AI processing (if you don’t run Inngest dev server)
-ENABLE_DIRECT_TICKET_PROCESSING=true
+
 ```
 
 ### Frontend environment (.env.local)
@@ -76,11 +75,11 @@ cd ai-ticket-assistant
 npm run dev
 ```
 
-Background workers (recommended):
+Background workers:
 ```bash
+cd ai-ticket-assistant
 npm run inngest-dev
 ```
-If you can’t run Inngest locally, keep `ENABLE_DIRECT_TICKET_PROCESSING=true` and the API will run AI processing inline on ticket creation.
 
 Frontend (React):
 ```bash
@@ -118,7 +117,7 @@ Admin
 - admin: everything + manage users and skills
 
 ## Notes & Troubleshooting
-- If AI enrichment doesn’t appear, set `ENABLE_DIRECT_TICKET_PROCESSING=true` and restart the API. For live LLM, add `GEMINI_API_KEY`.
+
 - Ensure MongoDB is reachable and JWT secret is set.
 - Mail delivery uses Mailtrap credentials; check their logs for message status.
 

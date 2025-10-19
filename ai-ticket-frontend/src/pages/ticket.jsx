@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 
 export default function TicketDetailsPage() {
@@ -7,10 +7,12 @@ export default function TicketDetailsPage() {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [edit, setEdit] = useState({ status: "", priority: "", helpfulNotes: "" });
 
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "null");
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchTicket = async () => {
@@ -50,6 +52,7 @@ export default function TicketDetailsPage() {
   if (!ticket) return <div className="text-center mt-10">Ticket not found</div>;
 
   const canEdit = user && ["admin", "moderator"].includes(user.role);
+  const canDelete = user?.role === "admin";
 
   const saveChanges = async () => {
     setSaving(true);
@@ -73,6 +76,34 @@ export default function TicketDetailsPage() {
       alert("Error updating ticket");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!canDelete) return;
+    const confirmed = window.confirm("Delete this ticket? This action cannot be undone.");
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/tickets/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data?.message || "Ticket deleted");
+        navigate("/");
+      } else {
+        alert(data?.error || data?.message || "Delete failed");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error deleting ticket");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -125,39 +156,60 @@ export default function TicketDetailsPage() {
               </p>
             )}
 
-            {canEdit && (
+            {(canEdit || canDelete) && (
               <div className="mt-6 space-y-2 border-t pt-4">
-                <h4 className="font-semibold">Moderator Controls</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <select
-                    className="select select-bordered"
-                    value={edit.status}
-                    onChange={(e) => setEdit({ ...edit, status: e.target.value })}
-                  >
-                    <option value="TODO">TODO</option>
-                    <option value="IN_PROGRESS">IN_PROGRESS</option>
-                    <option value="DONE">DONE</option>
-                  </select>
-                  <select
-                    className="select select-bordered"
-                    value={edit.priority}
-                    onChange={(e) => setEdit({ ...edit, priority: e.target.value })}
-                  >
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
+                {canEdit && (
+                  <>
+                    <h4 className="font-semibold">Moderator Controls</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <select
+                        className="select select-bordered"
+                        value={edit.status}
+                        onChange={(e) => setEdit({ ...edit, status: e.target.value })}
+                      >
+                        <option value="TODO">TODO</option>
+                        <option value="IN_PROGRESS">IN_PROGRESS</option>
+                        <option value="DONE">DONE</option>
+                      </select>
+                      <select
+                        className="select select-bordered"
+                        value={edit.priority}
+                        onChange={(e) => setEdit({ ...edit, priority: e.target.value })}
+                      >
+                        <option value="low">low</option>
+                        <option value="medium">medium</option>
+                        <option value="high">high</option>
+                      </select>
+                    </div>
+                    <textarea
+                      className="textarea textarea-bordered w-full"
+                      placeholder="Helpful notes"
+                      rows={6}
+                      value={edit.helpfulNotes}
+                      onChange={(e) => setEdit({ ...edit, helpfulNotes: e.target.value })}
+                    />
+                  </>
+                )}
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  {canEdit && (
+                    <button
+                      className="btn btn-primary sm:flex-1 md:flex-none"
+                      onClick={saveChanges}
+                      disabled={saving}
+                    >
+                      {saving ? "Saving..." : "Save Changes"}
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      className="btn btn-error sm:flex-1 md:flex-none"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                    >
+                      {deleting ? "Deleting..." : "Delete Ticket"}
+                    </button>
+                  )}
                 </div>
-                <textarea
-                  className="textarea textarea-bordered w-full"
-                  placeholder="Helpful notes"
-                  rows={6}
-                  value={edit.helpfulNotes}
-                  onChange={(e) => setEdit({ ...edit, helpfulNotes: e.target.value })}
-                />
-                <button className="btn btn-primary" onClick={saveChanges} disabled={saving}>
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
               </div>
             )}
           </>

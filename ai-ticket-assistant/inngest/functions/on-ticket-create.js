@@ -78,7 +78,7 @@ export const onTicketCreated = inngest.createFunction(
       return { success: true };
     } catch (err) {
       console.error("❌ Error running the step", err.message);
-      return { success: false };
+      throw err;
     }
   }
 );

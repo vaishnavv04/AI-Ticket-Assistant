@@ -1,46 +1,85 @@
 import { useEffect, useState } from "react";
 
+const PAGE_SIZE = 8;
+
 export default function AdminPanel() {
   const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({ role: "", skills: "" });
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [fetching, setFetching] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const token = localStorage.getItem("token");
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (!token) return;
 
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/auth/users`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setUsers(data);
-        setFilteredUsers(data);
-      } else {
-        console.error(data.error);
+    const controller = new AbortController();
+
+    const loadUsers = async () => {
+      setFetching(true);
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: PAGE_SIZE.toString(),
+        });
+
+        const trimmedSearch = searchQuery.trim();
+        if (trimmedSearch) {
+          params.append("search", trimmedSearch);
+        }
+
+        const res = await fetch(
+          `${import.meta.env.VITE_SERVER_URL}/api/auth/users?${params.toString()}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        const data = await res.json();
+        if (res.ok) {
+          setUsers(data.users || []);
+          setTotalPages(data.totalPages || 1);
+          setTotalUsers(data.total || 0);
+          if (typeof data.page === "number" && data.page !== page) {
+            setPage(data.page);
+          }
+        } else {
+          console.error(data.error || "Failed to fetch users");
+        }
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          console.error("Error fetching users", err);
+        }
+      } finally {
+        setFetching(false);
       }
-    } catch (err) {
-      console.error("Error fetching users", err);
-    }
-  };
+    };
+
+    loadUsers();
+
+    return () => controller.abort();
+  }, [token, page, searchQuery, reloadKey]);
 
   const handleEditClick = (user) => {
     setEditingUser(user.email);
     setFormData({
       role: user.role,
-      skills: user.skills?.join(", "),
+      skills: user.skills?.join(", ") || "",
     });
   };
 
   const handleUpdate = async () => {
+    if (!editingUser) return;
+    setSaving(true);
     try {
       const res = await fetch(
         `${import.meta.env.VITE_SERVER_URL}/api/auth/update-user`,
@@ -69,19 +108,29 @@ export default function AdminPanel() {
 
       setEditingUser(null);
       setFormData({ role: "", skills: "" });
-      fetchUsers();
+      setReloadKey((key) => key + 1);
     } catch (err) {
       console.error("Update failed", err);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleSearch = (e) => {
-    const query = e.target.value.toLowerCase();
-    setSearchQuery(query);
-    setFilteredUsers(
-      users.filter((user) => user.email.toLowerCase().includes(query))
-    );
+    setSearchQuery(e.target.value);
+    setPage(1);
   };
+
+  const goToPrevious = () => {
+    setPage((prev) => Math.max(prev - 1, 1));
+  };
+
+  const goToNext = () => {
+    setPage((prev) => Math.min(prev + 1, totalPages));
+  };
+
+  const disablePrev = page <= 1 || fetching;
+  const disableNext = page >= totalPages || fetching;
 
   return (
     <div className="max-w-4xl mx-auto mt-10">
@@ -93,7 +142,13 @@ export default function AdminPanel() {
         value={searchQuery}
         onChange={handleSearch}
       />
-      {filteredUsers.map((user) => (
+
+      {fetching && <p className="text-sm text-base-content/70 mb-4">Loading users...</p>}
+      {!fetching && users.length === 0 && (
+        <p className="text-sm text-base-content/70 mb-4">No users found.</p>
+      )}
+
+      {users.map((user) => (
         <div
           key={user._id}
           className="bg-base-100 shadow rounded p-4 mb-4 border"
@@ -139,12 +194,14 @@ export default function AdminPanel() {
                 <button
                   className="btn btn-success btn-sm"
                   onClick={handleUpdate}
+                  disabled={saving}
                 >
-                  Save
+                  {saving ? "Saving..." : "Save"}
                 </button>
                 <button
                   className="btn btn-ghost btn-sm"
                   onClick={() => setEditingUser(null)}
+                  disabled={saving}
                 >
                   Cancel
                 </button>
@@ -160,6 +217,31 @@ export default function AdminPanel() {
           )}
         </div>
       ))}
+
+      <div className="flex items-center justify-between mt-6">
+        <span className="text-sm text-base-content/70">
+          Showing page {page} of {totalPages} ({totalUsers} total)
+        </span>
+        <div className="join">
+          <button
+            className="btn btn-sm join-item"
+            onClick={goToPrevious}
+            disabled={disablePrev}
+          >
+            Previous
+          </button>
+          <span className="btn btn-sm join-item pointer-events-none">
+            Page {page} / {totalPages}
+          </span>
+          <button
+            className="btn btn-sm join-item"
+            onClick={goToNext}
+            disabled={disableNext}
+          >
+            Next
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
