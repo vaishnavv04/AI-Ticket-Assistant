@@ -4,7 +4,7 @@ An AI‑powered, production‑ready ticketing system. Users submit support ticke
 
 ### Highlights
 - AI ticket triage: priority, helpful notes, related skills
-- Auto‑assignment to moderators by skills (regex matching) with admin fallback
+- Auto‑assignment to moderators by skills 
 - JWT auth with RBAC: `user`, `moderator`, `admin`
 - Admin: manage users, roles, and skills
 - Background workers with Inngest 3, or inline processing fallback
@@ -33,7 +33,7 @@ AI-ticket-system-main/
 Clone and install both apps.
 
 ```bash
-git clone https://github.com/vaishnavv04/AI-Ticket-Assistant.git
+git clone https://github.com/vaishnavv04/AI-Ticket-Assistant
 cd AI-ticket-system-main
 
 # Backend
