@@ -1,4 +1,4 @@
-# 🎫 AI Ticket Assistant
+# 🎫 HelpMate AI
 
 A modern, AI-powered support ticket management system that intelligently triages, analyzes, and routes customer support requests using advanced AI models. Built with React, Express, and powered by Gemini AI with Groq fallback.
 
